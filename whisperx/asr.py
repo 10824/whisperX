@@ -6,6 +6,7 @@ import ctranslate2
 import faster_whisper
 import numpy as np
 import torch
+import time
 from transformers import Pipeline
 from transformers.pipelines.pt_utils import PipelineIterator
 
@@ -139,6 +140,7 @@ class FasterWhisperPipeline(Pipeline):
         return preprocess_kwargs, {}, {}
 
     def preprocess(self, audio):
+        start_time = time.time()
         audio = audio['inputs']
         model_n_mels = self.model.feat_kwargs.get("feature_size")
         features = log_mel_spectrogram(
@@ -146,10 +148,13 @@ class FasterWhisperPipeline(Pipeline):
             n_mels=model_n_mels if model_n_mels is not None else 80,
             padding=N_SAMPLES - audio.shape[0],
         )
+        print(f"Preprocessing time: {time.time() - start_time:.2f} seconds")
         return {'inputs': features}
 
     def _forward(self, model_inputs):
+        start_time = time.time()
         outputs = self.model.generate_segment_batched(model_inputs['inputs'], self.tokenizer, self.options)
+        print(f"Inference time: {time.time() - start_time:.2f} seconds")
         return {'text': outputs}
 
     def postprocess(self, model_outputs):
@@ -182,7 +187,7 @@ class FasterWhisperPipeline(Pipeline):
                 f2 = int(seg['end'] * SAMPLE_RATE)
                 # print(f2-f1)
                 yield {'inputs': audio[f1:f2]}
-
+        start_time = time.time()
         vad_segments = self.vad_model({"waveform": torch.from_numpy(audio).unsqueeze(0), "sample_rate": SAMPLE_RATE})
         vad_segments = merge_chunks(
             vad_segments,
@@ -190,6 +195,7 @@ class FasterWhisperPipeline(Pipeline):
             onset=self._vad_params["vad_onset"],
             offset=self._vad_params["vad_offset"],
         )
+        print(f"VAD processing time: {time.time() - start_time:.2f} seconds")
         if self.tokenizer is None:
             language = language or self.detect_language(audio)
             task = task or "transcribe"
@@ -284,13 +290,14 @@ def load_model(whisper_arch,
 
     if whisper_arch.endswith(".en"):
         language = "en"
-
+    start_time = time.time()
     model = model or WhisperModel(whisper_arch,
                          device=device,
                          device_index=device_index,
                          compute_type=compute_type,
                          download_root=download_root,
                          cpu_threads=threads)
+    print(f"Model loading time: {time.time() - start_time:.2f} seconds")
     if language is not None:
         tokenizer = faster_whisper.tokenizer.Tokenizer(model.hf_tokenizer, model.model.is_multilingual, task=task, language=language)
     else:
