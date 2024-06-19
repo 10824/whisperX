@@ -30,6 +30,7 @@ class WhisperModel(faster_whisper.WhisperModel):
     '''
 
     def generate_segment_batched(self, features: np.ndarray, tokenizer: faster_whisper.tokenizer.Tokenizer, options: faster_whisper.transcribe.TranscriptionOptions, encoder_output = None):
+        start_time = time.time()
         batch_size = features.shape[0]
         all_tokens = []
         prompt_reset_since = 0
@@ -63,21 +64,24 @@ class WhisperModel(faster_whisper.WhisperModel):
             )
 
         tokens_batch = [x.sequences_ids[0] for x in result]
-
+        
         def decode_batch(tokens: List[List[int]]) -> str:
+            start_time = time.time()
             res = []
             for tk in tokens:
                 res.append([token for token in tk if token < tokenizer.eot])
             # text_tokens = [token for token in tokens if token < self.eot]
+            print(f"decode_batch time: {time.time() - start_time:.2f} seconds")
             return tokenizer.tokenizer.decode_batch(res)
 
         text = decode_batch(tokens_batch)
-
+        print(f"generate_segment_batched time: {time.time() - start_time:.2f} seconds")
         return text
 
     def encode(self, features: np.ndarray) -> ctranslate2.StorageView:
         # When the model is running on multiple GPUs, the encoder output should be moved
         # to the CPU since we don't know which GPU will handle the next job.
+        start_time = time.time()
         to_cpu = self.model.device == "cuda" and len(self.model.device_index) > 1
         # unsqueeze if batch size = 1
         if len(features.shape) == 2:
