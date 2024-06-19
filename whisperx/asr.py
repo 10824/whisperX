@@ -87,7 +87,7 @@ class WhisperModel(faster_whisper.WhisperModel):
         if len(features.shape) == 2:
             features = np.expand_dims(features, 0)
         features = faster_whisper.transcribe.get_ctranslate2_storage(features)
-
+        print(f"encode time: {time.time() - start_time:.2f} seconds")
         return self.model.encode(features, to_cpu=to_cpu)
 
 class FasterWhisperPipeline(Pipeline):
